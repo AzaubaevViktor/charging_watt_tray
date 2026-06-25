@@ -25,6 +25,7 @@ type App struct {
 	energy *EnergyModel
 
 	tick    int
+	started bool // first reading has landed (startup spinner stops)
 	iconKey string
 	compute float64 // cpu+gpu watts, the anchor for per-process attribution
 
@@ -67,19 +68,43 @@ func (a *App) onReady() {
 	a.buildMenu()
 	shrinkTitleFont(titleFontSize) // systray has no font knob; match the old 11pt
 	a.setIcon(50)                  // placeholder until the first refresh
+	go a.spin()
 	go a.loop()
 }
 
-// loop refreshes on a cadence that slows down in Low Power Mode.
+// spin animates a braille spinner in the title until the first reading lands,
+// so the bar shows "working…" instead of a frozen placeholder. The lock makes
+// it hand off cleanly to refresh: once started is set, spin never repaints.
+func (a *App) spin() {
+	frames := []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+	for i := 0; ; i++ {
+		time.Sleep(120 * time.Millisecond)
+		a.mu.Lock()
+		if a.started {
+			a.mu.Unlock()
+			return
+		}
+		systray.SetTitle(string(frames[i%len(frames)]))
+		a.mu.Unlock()
+	}
+}
+
+// loop refreshes on a cadence that slows down in Low Power Mode. The first read
+// happens after a short warm-up (behind the spinner) instead of a full interval.
 func (a *App) loop() {
+	warmup := true
 	for {
 		lowPower := lowPowerMode()
-		d := interval
-		if lowPower {
-			d = lowPowerInterval
+		switch {
+		case warmup:
+			time.Sleep(time.Second)
+		case lowPower:
+			time.Sleep(lowPowerInterval * time.Second)
+		default:
+			time.Sleep(interval * time.Second)
 		}
-		time.Sleep(time.Duration(d) * time.Second)
 		a.refresh(lowPower)
+		warmup = false
 	}
 }
 
@@ -90,6 +115,7 @@ func (a *App) onExit() {}
 func (a *App) refresh(lowPower bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.started = true // stop the startup spinner; we own the title from here
 
 	sysw, adapter, batt := a.readPower()
 	b := readBattery()
