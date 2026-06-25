@@ -1,54 +1,29 @@
 package main
 
 import (
-	"bytes"
-	"image/png"
+	"fmt"
 	"math"
-
-	"github.com/fogleman/gg"
 )
 
-// systray forces every status icon to a 16x16 square ([image setSize:16,16]),
-// so a non-square PNG gets stretched. We therefore draw the 10-wide battery
-// centered inside an 18x18 square (rendered at 4x for retina) — the square keeps
-// the aspect ratio intact when systray squares it off.
-const (
-	battSquare = 18.0 // square canvas side, in drawing units
-	battScale  = 4.0  // device-pixel multiplier
-	battInsetX = (battSquare - 10.0) / 2.0
-)
-
-// renderBattery draws a vertical battery (terminal on top) with a fill rising
-// from the bottom proportional to level, as a black-on-transparent template PNG
+// renderBattery builds a vertical battery (terminal on top) with a fill rising
+// from the bottom proportional to level, as an SVG that NSImage rasterises
+// itself — no PNG, no drawing library. It is a template image (black + alpha),
 // so macOS tints it for light/dark menu bars.
+//
+// The viewBox is square (18x18) with the 10-wide battery centered: systray
+// forces every status icon to 16x16 ([image setSize:16,16]), so a non-square
+// viewBox would be stretched.
 func renderBattery(level int) []byte {
-	px := int(battSquare * battScale)
-	dc := gg.NewContext(px, px)
-	dc.Scale(battScale, battScale)
-	dc.Translate(battInsetX, 0) // center the 10-wide battery in the square
-	black := func(a float64) { dc.SetRGBA(0, 0, 0, a) }
-
-	// terminal nub
-	black(0.5)
-	dc.DrawRoundedRectangle(3, 0.4, 4, 2, 0.9)
-	dc.Fill()
-
-	// body outline (stroke only); gg ignores the scale for line width, so scale it
-	black(0.5)
-	dc.DrawRoundedRectangle(1, 2.4, 8, 15, 2)
-	dc.SetLineWidth(1.3 * battScale)
-	dc.Stroke()
-
-	// fill, rising from the bottom
 	const innerTop, innerBottom = 3.6, 16.2
 	frac := math.Max(0, math.Min(1, float64(level)/100))
 	fillH := math.Max(0.6, frac*(innerBottom-innerTop))
-	r := math.Min(1, fillH/2)
-	black(1.0)
-	dc.DrawRoundedRectangle(2.3, innerBottom-fillH, 5.4, fillH, r)
-	dc.Fill()
-
-	var buf bytes.Buffer
-	_ = png.Encode(&buf, dc.Image())
-	return buf.Bytes()
+	fillY := innerBottom - fillH
+	svg := fmt.Sprintf(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">`+
+			`<rect x="7" y="0.4" width="4" height="2" rx="0.9" fill="black" fill-opacity="0.5"/>`+
+			`<rect x="5" y="2.4" width="8" height="15" rx="2" fill="none" stroke="black" `+
+			`stroke-width="1.3" stroke-opacity="0.5"/>`+
+			`<rect x="6.3" y="%.2f" width="5.4" height="%.2f" rx="1" fill="black"/></svg>`,
+		fillY, fillH)
+	return []byte(svg)
 }
