@@ -1,5 +1,24 @@
 # TODO
 
+## Done (Go port)
+- [x] Переписано на Go (`fogleman/gg` + `getlantern/systray`), по образцу
+      соседнего `claude_limits`. SMC и IOReport — через cgo (IOKit / dlopen
+      `libIOReport.dylib`); `ioreg`/`top` — через subprocess. На реальном
+      железе цифры сходятся (PSTR=System=CPU+GPU+Other).
+- [x] Разбито на модули: `smc.go`, `ioreport.go`, `battery.go`, `top.go`,
+      `format.go`, `icon.go`, `app.go`, `menu.go`, `main.go`. Чистая логика
+      (`parseTop`, `fmtTime*`, `wattTitle`) покрыта тестами.
+- [x] Цифра ватт фиксированной ширины в баре: целая часть дополняется
+      figure-space (U+2007, ширина цифры) до 2 знаков — `wattTitle` в
+      `format.go`. "5W" и "12W" занимают одну ширину, бар не дёргается.
+- [x] Код упрощён: убран ленивый ioreg-`PowerTelemetryData` fallback (на
+      Apple Silicon SMC всегда есть), вся C-возня спрятана в cgo-обёртки.
+
+## Open (после порта)
+- [ ] Правое выравнивание ватт в "Top usage": в Python был NSAttributedString
+      с табстопом; systray рисует только plain text, так что колонка теперь
+      просто после имени процесса. Вернуть выравнивание = свой NSView/attrs.
+
 ## Done
 - [x] Real-time мощность без лага и без sudo — чтение SMC (см. `smc.py`):
       PSTR=система, PDTR=адаптер, PBAT=батарея. Заменило медленный

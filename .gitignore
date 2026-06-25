@@ -1,9 +1,5 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
+# Go
+/charging-app
 
 # macOS
 .DS_Store
