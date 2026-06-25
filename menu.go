@@ -34,7 +34,7 @@ func (a *App) buildMenu() {
 
 	go func() {
 		for range refresh.ClickedCh {
-			a.refresh()
+			a.refresh(lowPowerMode())
 		}
 	}()
 	go func() {

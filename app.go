@@ -10,10 +10,12 @@ import (
 )
 
 const (
-	interval  = 5 // seconds between refreshes
-	topCount  = 5 // processes shown in the "Top usage" submenu
-	topEvery  = 2 // re-run `top` every N ticks
-	iconLevel = 5 // re-render the icon only when level crosses a 5% bucket
+	interval         = 5  // seconds between refreshes
+	lowPowerInterval = 15 // …slower in macOS Low Power Mode
+	topCount         = 5  // processes shown in the "Top usage" submenu
+	topEvery         = 2  // re-run `top` every N ticks
+	iconLevel        = 5  // re-render the icon only when level crosses a 5% bucket
+	titleFontSize    = 11 // menu-bar title font (systray defaults to ~14pt)
 )
 
 // App holds the readers, the cached state, and the menu items.
@@ -63,19 +65,29 @@ func (a *App) onReady() {
 	systray.SetTitle("…W")
 	systray.SetTooltip("Wattmeter")
 	a.buildMenu()
-	a.setIcon(50) // placeholder until the first refresh
-	go func() {
-		for range time.Tick(interval * time.Second) {
-			a.refresh()
+	shrinkTitleFont(titleFontSize) // systray has no font knob; match the old 11pt
+	a.setIcon(50)                  // placeholder until the first refresh
+	go a.loop()
+}
+
+// loop refreshes on a cadence that slows down in Low Power Mode.
+func (a *App) loop() {
+	for {
+		lowPower := lowPowerMode()
+		d := interval
+		if lowPower {
+			d = lowPowerInterval
 		}
-	}()
+		time.Sleep(time.Duration(d) * time.Second)
+		a.refresh(lowPower)
+	}
 }
 
 func (a *App) onExit() {}
 
 // refresh reads every source and repaints the title and menu. It is serialized
 // by the lock so the menu-item click handlers don't race the ticker.
-func (a *App) refresh() {
+func (a *App) refresh(lowPower bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -123,7 +135,11 @@ func (a *App) refresh() {
 	}
 
 	avg := a.trackRefresh(sysw)
-	a.status.SetTitle(fmt.Sprintf("🔋 %d%%   ·   refresh ~%.1fs", level, avg))
+	status := fmt.Sprintf("🔋 %d%%   ·   refresh ~%.1fs", level, avg)
+	if lowPower {
+		status += "   ·   🪫 low power"
+	}
+	a.status.SetTitle(status)
 	systray.SetTitle(title)
 
 	a.pollTop()

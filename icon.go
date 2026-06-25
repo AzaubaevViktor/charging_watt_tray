@@ -8,17 +8,24 @@ import (
 	"github.com/fogleman/gg"
 )
 
-// battScale renders the 10x18 icon at 4x so it stays crisp on retina; systray
-// scales the PNG down to the menu-bar height.
-const battScale = 4.0
+// systray forces every status icon to a 16x16 square ([image setSize:16,16]),
+// so a non-square PNG gets stretched. We therefore draw the 10-wide battery
+// centered inside an 18x18 square (rendered at 4x for retina) — the square keeps
+// the aspect ratio intact when systray squares it off.
+const (
+	battSquare = 18.0 // square canvas side, in drawing units
+	battScale  = 4.0  // device-pixel multiplier
+	battInsetX = (battSquare - 10.0) / 2.0
+)
 
 // renderBattery draws a vertical battery (terminal on top) with a fill rising
 // from the bottom proportional to level, as a black-on-transparent template PNG
 // so macOS tints it for light/dark menu bars.
 func renderBattery(level int) []byte {
-	const vbW, vbH = 10.0, 18.0
-	dc := gg.NewContext(int(vbW*battScale), int(vbH*battScale))
+	px := int(battSquare * battScale)
+	dc := gg.NewContext(px, px)
 	dc.Scale(battScale, battScale)
+	dc.Translate(battInsetX, 0) // center the 10-wide battery in the square
 	black := func(a float64) { dc.SetRGBA(0, 0, 0, a) }
 
 	// terminal nub
